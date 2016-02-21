@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>ineedatestcert</title>
+
+    <!-- Set the viewport width to device width for mobile -->
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+	<!-- SEO metas -->
+	<meta name="author" content="ineedatestcert.com">
+	<meta name="description" content="Generate test certificates">
+	<meta name="keywords" content="test, generator, certificate" />
+
+	<!-- Favicon -->
+	<link rel="shortcut icon" href="/images/favicon.png" type="image/png">
+
+	<!-- Styles -->
+	<link rel="stylesheet" type="text/css" href="/styles/main.css">
+	<link rel="stylesheet" type="text/css" href="/styles/font-awesome.min.css">
+	
+</head>
+<body>
+	<div class="header">
+		<a href="/"><img src="/images/ineedatestcert_logo.png" alt="ineedatestcert logo" id="logo"/></a>
+	</div>
+	
+	<div class="content">
+        <h1>Here's your new test cert.</h1>
+        <p>CommonName: {{cn}}</p>
+        <p>Base64:</p>
+        <div class='code-wrapper'>
+        <code>{{b64}}</code>
+        </div>
+        <br/>
+        <a href="/dl/{{cn}}.pfx" target="_blank">Download cert.pfx</a>
+        <a href="/dl/{{cn}}.cer" target="_blank">Download public.cer</a>
+        <p id="credits">Made with all the love in the world by <a href="https://twitter.com/bengreenier">@bengreenier</a></p>
+	</div>
+
+	<!-- Scripts -->
+	<script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
+	
+	<script src="/scripts/custom.js"></script>
+
+</body>
+</html>

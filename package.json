@@ -1,0 +1,33 @@
+{
+  "name": "ineedatestcert.com",
+  "version": "0.1.0",
+  "description": "a website to front the functionality of ineedatestcert cli",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bengreenier/ineedatestcert.com.git"
+  },
+  "keywords": [
+    "ineedatestcert",
+    "website"
+  ],
+  "author": "Ben Greenier",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bengreenier/ineedatestcert.com/issues"
+  },
+  "homepage": "https://github.com/bengreenier/ineedatestcert.com#readme",
+  "dependencies": {
+    "base64-js": "^1.0.4",
+    "del": "^2.2.0",
+    "express": "^4.13.4",
+    "ineedatestcert": "^0.1.0",
+    "node-cache": "^3.1.0",
+    "promise": "^7.1.1",
+    "serve-static": "^1.10.2",
+    "swig": "^1.4.2"
+  }
+}
