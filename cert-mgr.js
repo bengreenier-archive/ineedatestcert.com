@@ -21,6 +21,10 @@ CertMgr.prototype.add = function (certInstance) {
     return ret;
 }
 
+CertMgr.prototype.shift = function () {
+    return this._store.shift();
+}
+
 CertMgr.prototype.full = function () {
     return this.length >= this.max;
 }

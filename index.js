@@ -28,15 +28,39 @@ app.get('/', function (req, res) {
 
 // actually news up a cert - slower
 app.get('/unique', function (req, res) {
-    new Cert({}).crunch(function (cert) {
-        fs.writeFileSync("tmp/"+cert.opts.name+".pfx", cert.getRaw(), {encoding: "binary"});
-        fs.writeFileSync("tmp/"+cert.opts.name+".cer", cert.getRawPublicOnly());
+    makeCert().then(function (cert) {
         res.render('index', {
-            cert: cert.getRaw(),
             cn: cert.opts.name,
-            ca: cert.getRawPublicOnly(),
             b64: cert.getBase64()
         });
+    }, function (err) {
+        res.status(500).end();
+    });
+});
+
+// TODO: obviously there's a collision bug with fs names
+// with anything generated via this endpoint - going to ship
+// with the bug for now, and fix later - this is an undocumented
+// "api" anyway.
+app.get('/new/:cn/:ou/:keysize', function (req, res) {
+    var opts = {};
+    if (typeof(req.params.cn) === "string") {
+        opts.name = req.params.cn;
+    }
+    if (typeof(req.params.ou) === "string") {
+        opts.org = req.params.ou;
+    }
+    if (typeof(req.params.keysize) === "string") {
+        opts.b = new Number(req.params.keysize).valueOf();
+    }
+    
+    makeCert(opts).then(function (cert) {
+        res.render('index', {
+            cn: cert.opts.name,
+            b64: cert.getBase64()
+        });
+    }, function (err) {
+        res.status(500).end();
     });
 });
 
@@ -46,7 +70,7 @@ app.get('/dl/:cn', function (req, res) {
         dotfiles: 'deny'
     }, function (err) {
         if (err) {
-            res.status(err.status).end();
+            res.status(500).end();
         }
     });
 });
@@ -60,16 +84,15 @@ var mgr = new CertMgr({
 console.log("startup takes a bit - we're generating certs");
 del.sync("tmp");
 fs.mkdirSync("tmp/");
+
 var proms = [];
 for (var i = 0; i < mgr.max; i++) {
-    proms.push(new Promise(function (res) {   
-        new Cert({}).crunch(function (cert) {
-            mgr.add(cert);
-            console.log("adding "+cert.opts.name);
-            fs.writeFileSync("tmp/"+cert.opts.name+".pfx", cert.getRaw(), {encoding: "binary"});
-            fs.writeFileSync("tmp/"+cert.opts.name+".cer", cert.getRawPublicOnly());
-            res();
-        });
+    proms.push(makeCert().then(function(cert) {
+        mgr.add(cert);
+        console.log("startup - generated "+cert.opts.name);
+    }, function (err) {
+        // for debug only - we don't care
+        console.error("startup - ",err);
     }));
 }
 
@@ -83,16 +106,16 @@ Promise.all(proms).then(function () {
 
     setInterval(function addNewCert() {
         // every 5 minutes we swap out the oldest cert
-        new Cert({}).crunch(function (cert) {
-            var old = mgr.add(cert);
-            if (old) {
-                console.log("cleaning up "+old.opts.name);
-                del.sync("tmp/"+old.opts.name+".pfx");
-                del.sync("tmp/"+old.opts.name+".cer");
-            }
-            console.log("adding "+cert.opts.name);
-            fs.writeFileSync("tmp/"+cert.opts.name+".pfx", cert.getRaw(), {encoding: "binary"});
-            fs.writeFileSync("tmp/"+cert.opts.name+".cer", cert.getRawPublicOnly());
+        makeCert().then(function (cert) {
+            var nuking = mgr.shift();
+            del.sync("tmp/"+nuking.opts.name+".pfx");
+            del.sync("tmp/"+nuking.opts.name+".cer");
+            console.log("removed "+nuking.opts.name);
+            mgr.add(cert);
+            console.log("added "+cert.opts.name);
+        }, function (err) {
+            // for debug - we don't actually care
+            console.error(err);
         });
     }, 1000*60);
 });
@@ -106,4 +129,22 @@ function getRandomCert() {
         ca: mgr.at(index).getRawPublicOnly(),
         b64: mgr.at(index).getBase64()
     };
+}
+
+function makeCert(opts) {
+    opts = opts || {};
+    return new Promise(function (res, rej) {
+        new Cert(opts).crunch(function (cert) {
+            if (fs.existsSync(cert.opts.name+".pfx") || fs.existsSync(cert.opts.name+".cer")) {
+                return rej(new Error("already exists on disk"));
+            }
+            try {
+                fs.writeFileSync("tmp/"+cert.opts.name+".pfx", cert.getRaw(), {encoding: "binary"});
+                fs.writeFileSync("tmp/"+cert.opts.name+".cer", cert.getRawPublicOnly());
+                res(cert);
+            } catch (ex) {
+                return rej(ex);
+            }
+        });
+    });
 }
