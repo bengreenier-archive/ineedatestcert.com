@@ -104,7 +104,7 @@ function getSpecificCert(id) {
 
 function getRandomCert() {
     var rKeys = randomCache.keys();
-    var id = rKeys[Math.floor(Math.random()*rKeys.length)];
+    var id = rKeys[Math.floor(Math.random()*(rKeys.length-1))];
     return {id: id, cert: randomCache.get(id)};
 }
 
