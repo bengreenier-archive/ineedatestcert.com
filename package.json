@@ -1,10 +1,11 @@
 {
   "name": "ineedatestcert.com",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "a website to front the functionality of ineedatestcert cli",
   "main": "index.js",
   "scripts": {
-    "test": "mocha"
+    "test": "echo nope",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -21,8 +22,6 @@
   },
   "homepage": "https://github.com/bengreenier/ineedatestcert.com#readme",
   "dependencies": {
-    "base64-js": "^1.0.4",
-    "del": "^2.2.0",
     "express": "^4.13.4",
     "ineedatestcert": "^0.1.0",
     "node-cache": "^3.1.0",
