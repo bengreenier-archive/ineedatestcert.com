@@ -1,12 +1,16 @@
-var app = require('express')();
+var express = require('express');
 var ss = require('serve-static');
 var swig = require('swig');
 var Cert = require('ineedatestcert');
 var Promise = require('promise');
-var CertMgr = require('./cert-mgr');
-var b64 = require('base64-js');
-var fs = require('fs');
-var del = require('del');
+var Cache = require('node-cache');
+var uuid = require('uuid');
+
+var app = express();
+
+// we keep stuff in mem
+var specificCache = new Cache({stdTTL: 60*10, checkperiod: 60*5, useClones: false});
+var randomCache = new Cache({stdTTL: 60*2, useClones: false});
 
 // This is where all the magic happens!
 app.engine('html', swig.renderFile);
@@ -23,128 +27,128 @@ app.use(ss('public/'));
 
 // used random cached data - fast
 app.get('/', function (req, res) {
-  res.render('index', getRandomCert());
+    var wrapper = getRandomCert();
+    res.render('index', {id: wrapper.id, b64: wrapper.cert.getBase64(), name: wrapper.cert.opts.name});
 });
-
-// actually news up a cert - slower
-app.get('/unique', function (req, res) {
-    makeCert().then(function (cert) {
-        res.render('index', {
-            cn: cert.opts.name,
-            b64: cert.getBase64()
-        });
-    }, function (err) {
-        res.status(500).end();
-    });
-});
-
-// TODO: obviously there's a collision bug with fs names
-// with anything generated via this endpoint - going to ship
-// with the bug for now, and fix later - this is an undocumented
-// "api" anyway.
-app.get('/new/:cn/:ou/:keysize', function (req, res) {
+app.get('/new/:name/:org/:keysize', function (req, res) {
     var opts = {};
-    if (typeof(req.params.cn) === "string") {
-        opts.name = req.params.cn;
+    if (typeof(req.params.name) === "string") {
+        opts.name = req.params.name;
     }
-    if (typeof(req.params.ou) === "string") {
-        opts.org = req.params.ou;
+    if (typeof(req.params.org) === "string") {
+        opts.org = req.params.org;
     }
     if (typeof(req.params.keysize) === "string") {
         opts.b = new Number(req.params.keysize).valueOf();
     }
-    
-    makeCert(opts).then(function (cert) {
-        res.render('index', {
-            cn: cert.opts.name,
-            b64: cert.getBase64()
-        });
+    makeCert(opts).then(function (wrapper) {
+        res.render('index', {id: wrapper.id, b64: wrapper.cert.getBase64(), name: wrapper.cert.opts.name});
     }, function (err) {
+        console.error("/new error: ",err);
         res.status(500).end();
     });
 });
 
-app.get('/dl/:cn', function (req, res) {
-    res.sendFile(req.params.cn, {
-        root: "tmp/",
-        dotfiles: 'deny'
-    }, function (err) {
-        if (err) {
-            res.status(500).end();
-        }
-    });
+
+app.get("/raw/public/:id.cer", function (req, res) {
+    var wrapper = getSpecificCert(req.params.id);
+    if (wrapper.cert) {
+        sendCertPublic(res, wrapper.cert);
+    } else {
+        res.status(500).end();
+    }
+});
+app.get("/raw/:id.pfx", function (req, res) {
+    var wrapper = getSpecificCert(req.params.id);
+    if (wrapper.cert) {
+        sendCertPfx(res, wrapper.cert);
+    } else {
+        res.status(500).end();
+    }
 });
 
-// generate the cert mgr
-var mgr = new CertMgr({
-    max: 20
-});
-
-// burn cpu as we startup to fill mgr
-console.log("startup takes a bit - we're generating certs");
-del.sync("tmp");
-fs.mkdirSync("tmp/");
-
+// setup inital certs
+console.log("generating certs");
 var proms = [];
-for (var i = 0; i < mgr.max; i++) {
-    proms.push(makeCert().then(function(cert) {
-        mgr.add(cert);
-        console.log("startup - generated "+cert.opts.name);
-    }, function (err) {
-        // for debug only - we don't care
-        console.error("startup - ",err);
-    }));
+for (var i = 0 ; i < 20 ; i++) {
+    proms.push(makeCert());
 }
 
 Promise.all(proms).then(function () {
-    console.log("manager "+(mgr.full() ? "is": "is not")+" full with "+mgr.length+" certs");
+    console.log("initial certs generated");
     
-    // start up
+    // this makes a new cert every 10 minutes
+    setInterval(function cycle() {
+        makeCert();
+    },1000*60*10);
+    
     app.listen(process.env.PORT || 3000, function () {
-        console.log('Application Started on '+(process.env.PORT || 3000));
+        console.log("up on "+(process.env.PORT || 3000));
     });
-
-    setInterval(function addNewCert() {
-        // every 5 minutes we swap out the oldest cert
-        makeCert().then(function (cert) {
-            var nuking = mgr.shift();
-            del.sync("tmp/"+nuking.opts.name+".pfx");
-            del.sync("tmp/"+nuking.opts.name+".cer");
-            console.log("removed "+nuking.opts.name);
-            mgr.add(cert);
-            console.log("added "+cert.opts.name);
-        }, function (err) {
-            // for debug - we don't actually care
-            console.error(err);
-        });
+    
+    // every minute we log an update of counts
+    setInterval(function logUpdate() {
+        console.log("specific certs:"+specificCache.keys().length+" - random certs:"+randomCache.keys().length);
     }, 1000*60);
+}, function (err) {
+    console.error("error: ", err);
 });
 
-// helper to get data for the / endpoint
+function getSpecificCert(id) {
+    if (id[0] === "S") {
+        return {id: id, cert: specificCache.get(id)};
+    } else {
+        return {id: id, cert: randomCache.get(id)};
+    }
+}
+
 function getRandomCert() {
-    var index = Math.floor(Math.random() * mgr.length);  
-    return {
-        cert: mgr.at(index).getRaw(),
-        cn: mgr.at(index).opts.name,
-        ca: mgr.at(index).getRawPublicOnly(),
-        b64: mgr.at(index).getBase64()
-    };
+    var rKeys = randomCache.keys();
+    var id = rKeys[Math.floor(Math.random()*rKeys.length)];
+    return {id: id, cert: randomCache.get(id)};
 }
 
 function makeCert(opts) {
     opts = opts || {};
     return new Promise(function (res, rej) {
         new Cert(opts).crunch(function (cert) {
-            if (fs.existsSync(cert.opts.name+".pfx") || fs.existsSync(cert.opts.name+".cer")) {
-                return rej(new Error("already exists on disk"));
+            var id = uuid.v4();
+            if (opts.name) id = "S"+id;
+            else id = "R"+id;
+            if (id[0] === "S") {
+                specificCache.set(id, cert);
+            } else {
+                randomCache.set(id, cert);
             }
-            try {
-                fs.writeFileSync("tmp/"+cert.opts.name+".pfx", cert.getRaw(), {encoding: "binary"});
-                fs.writeFileSync("tmp/"+cert.opts.name+".cer", cert.getRawPublicOnly());
-                res(cert);
-            } catch (ex) {
-                return rej(ex);
-            }
+            return res({
+                id: id,
+                cert: cert
+            });
         });
     });
 }
+
+function sendCertPfx(res, cert) {
+    var bits = cert.getRaw();
+    res.setHeader('Content-Type', 'application/x-pkcs12');
+    res.setHeader('Content-Length', Buffer.byteLength(bits));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(200).end(bits);
+}
+
+function sendCertPublic(res, cert) {
+    var bits = cert.getRawPublicOnly();
+    res.setHeader('Content-Type', 'application/pkix-cert');
+    res.setHeader('Content-Length', Buffer.byteLength(bits));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(200).end(bits);
+}
+
+// TODO: if we had support for the pem keys, we'd use this
+// function sendCertPem(res, cert) {
+//     var bits = cert.getRawPublicOnly();
+//     res.setHeader('Content-Type', 'application/x-pem-file');
+//     res.setHeader('Content-Length', Buffer.byteLength(bits));
+//     res.setHeader('X-Content-Type-Options', 'nosniff');
+//     res.status(200).end(bits);
+// }

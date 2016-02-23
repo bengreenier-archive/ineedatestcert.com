@@ -31,14 +31,14 @@
 	
 	<div class="content">
         <h1>Here's your new test cert.</h1>
-        <p>CommonName: {{cn}}</p>
+        <p>CommonName: {{name}}</p>
         <p>Base64:</p>
         <div class='code-wrapper'>
         <code>{{b64}}</code>
         </div>
         <br/>
-        <a href="/dl/{{cn}}.pfx" target="_blank">Download cert.pfx</a>
-        <a href="/dl/{{cn}}.cer" target="_blank">Download public.cer</a>
+        <a href="/raw/{{id}}.pfx" target="_blank">Download cert.pfx</a>
+        <a href="/raw/public/{{id}}.cer" target="_blank">Download public.cer</a>
         <p id="credits">Made with all the love in the world by <a href="https://twitter.com/bengreenier">@bengreenier</a></p>
 	</div>
 
