@@ -9,8 +9,8 @@ var uuid = require('uuid');
 var app = express();
 
 // we keep stuff in mem
-var specificCache = new Cache({stdTTL: 60*10, checkperiod: 60*5, useClones: false});
-var randomCache = new Cache({stdTTL: 60*2, useClones: false});
+var specificCache = new Cache({stdTTL: 100});
+var randomCache = new Cache({stdTTL: 400});
 
 // This is where all the magic happens!
 app.engine('html', swig.renderFile);
@@ -68,19 +68,15 @@ app.get("/raw/:id.pfx", function (req, res) {
 });
 
 // setup inital certs
-console.log("generating certs");
-var proms = [];
-for (var i = 0 ; i < 20 ; i++) {
-    proms.push(makeCert());
-}
+var proms = generateCerts();
 
 Promise.all(proms).then(function () {
     console.log("initial certs generated");
     
-    // this makes a new cert every 10 minutes
+    // this makes a new cert every 400 seconds
     setInterval(function cycle() {
-        makeCert();
-    },1000*60*10);
+        generateCerts(); // we don't care about the promise
+    },1000*400);
     
     app.listen(process.env.PORT || 3000, function () {
         console.log("up on "+(process.env.PORT || 3000));
@@ -104,10 +100,17 @@ function getSpecificCert(id) {
 
 function getRandomCert() {
     var rKeys = randomCache.keys();
-    var id = rKeys[Math.floor(Math.random()*(rKeys.length-1))];
+    var id = rKeys[Math.floor(Math.random()*rKeys.length)];
     return {id: id, cert: randomCache.get(id)};
 }
-
+function generateCerts() {
+    console.log("generating certs");
+    var proms = [];
+    for (var i = 0 ; i < 20 ; i++) {
+        proms.push(makeCert());
+    }
+    return proms;
+}
 function makeCert(opts) {
     opts = opts || {};
     return new Promise(function (res, rej) {
