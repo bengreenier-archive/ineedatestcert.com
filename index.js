@@ -22,7 +22,12 @@ app.use(ss('public/'));
 
 // used random cached data - fast
 app.get('/', function (req, res) {
-    new Cert({}).crunch(function (cert) {
+    new Cert({}).crunch(function (err, cert) {
+        if (err) {
+            console.error(err);
+            res.status(500).end("Failed to generate cert");
+        }
+        
         var id = uuid.v4();
         specificCache.set(id, cert);
         res.render('index', {id: id, b64: cert.getBase64(), name: cert.opts.name});
@@ -40,7 +45,12 @@ app.get('/new/:name/:org/:keysize', function (req, res) {
         opts.b = new Number(req.params.keysize).valueOf();
     }
     try {
-        new Cert(opts).crunch(function (cert) {
+        new Cert(opts).crunch(function (err, cert) {
+            if (err) {
+                console.error(err);
+                res.status(500).end("Failed to generate cert");
+            }
+            
             var id = uuid.v4();
             specificCache.set(id, cert);
             res.render('index', {id: id, b64: cert.getBase64(), name: cert.opts.name});
