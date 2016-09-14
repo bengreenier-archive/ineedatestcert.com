@@ -18,7 +18,13 @@ app.set('views', __dirname + '/views');
 // To disable Swig's cache, do the following:
 swig.setDefaults({ cache: false });
 
-app.use(ss('public/'));
+app.use(ss('public/', {
+    setHeaders: function(res, path) {
+        if (path.endsWith(".svg")) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+        }
+    }
+}));
 
 // used random cached data - fast
 app.get('/', function (req, res) {
